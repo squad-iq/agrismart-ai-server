@@ -1,5 +1,4 @@
 const express = require("express");
-const axios = require("axios");
 const cors = require("cors");
 
 const app = express();
@@ -7,55 +6,32 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 
-// 🌿 Test route
+// ✅ الصفحة الرئيسية (تحل مشكلة Cannot GET /)
 app.get("/", (req, res) => {
-  res.send("🌿 AgriSmart API is running");
+  res.status(200).send("🌿 AgriSmart API is running");
 });
 
-// 🔥 Analyze endpoint
-app.post("/analyze", async (req, res) => {
+// ✅ API test
+app.get("/health", (req, res) => {
+  res.status(200).json({ status: "ok" });
+});
+
+// ✅ analyze endpoint (أساسي لمشروعك)
+app.post("/analyze", (req, res) => {
   try {
-    const { image } = req.body;
+    const data = req.body;
 
-    if (!image) {
-      return res.status(400).json({
-        success: false,
-        error: "No image provided"
-      });
+    if (!data) {
+      return res.status(400).json({ error: "No data received" });
     }
 
-    const apiKey = process.env.GEMINI_API_KEY;
-
-    if (!apiKey) {
-      return res.status(500).json({
-        success: false,
-        error: "Missing GEMINI_API_KEY in environment variables"
-      });
-    }
-
-    const response = await axios.post(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
-      {
-        contents: [
-          {
-            parts: [
-              {
-                text: "Analyze this plant image and detect disease with treatment suggestions."
-              }
-            ]
-          }
-        ]
-      }
-    );
-
-    return res.json({
+    return res.status(200).json({
       success: true,
-      data: response.data
+      message: "Image received successfully",
+      data: data
     });
 
   } catch (error) {
-    console.log("ERROR:", error.message);
-
     return res.status(500).json({
       success: false,
       error: error.message
@@ -63,9 +39,9 @@ app.post("/analyze", async (req, res) => {
   }
 });
 
-// 🚀 Start server (IMPORTANT for Railway)
-const port = process.env.PORT || 3000;
+// ✅ تشغيل السيرفر
+const PORT = process.env.PORT || 3000;
 
-app.listen(port, () => {
-  console.log("Server running on port " + port);
+app.listen(PORT, () => {
+  console.log("Server running on port " + PORT);
 });
