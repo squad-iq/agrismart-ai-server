@@ -8,7 +8,7 @@ app.use(express.json({ limit: "25mb" }));
 
 const API_KEY = process.env.GEMINI_API_KEY;
 
-// 🟢 اختبار
+// 🟢 اختبار السيرفر
 app.get("/", (req, res) => {
     res.send("GreenMind API is running 🚀");
 });
@@ -21,10 +21,12 @@ app.post("/predict", async (req, res) => {
         let imageData = req.body.image;
 
         if (!imageData) {
-            return res.status(400).json({ error: "No image provided" });
+            return res.status(400).json({
+                error: "No image provided"
+            });
         }
 
-        // 🧹 تنظيف Base64 (مهم جدًا)
+        // 🧹 تنظيف Base64
         imageData = imageData
             .replace(/^data:image\/\w+;base64,/, "")
             .replace(/\s/g, "");
@@ -39,29 +41,34 @@ app.post("/predict", async (req, res) => {
                 body: JSON.stringify({
                     contents: [
                         {
+                            role: "user",
                             parts: [
-                                {
-                                    text: `
-أنت خبير زراعي محترف.
 
-حلل صورة النبات بدقة.
-
-أعد فقط JSON بدون أي شرح:
-
-{
-  "disease": "اسم المرض أو healthy",
-  "confidence": "رقم من 0 إلى 100",
-  "treatment": "العلاج المناسب"
-}
-
-إذا لم تستطع التحديد اكتب "غير معروف".
-`
-                                },
+                                // 🔥 IMPORTANT: IMAGE FIRST
                                 {
                                     inline_data: {
                                         mime_type: "image/jpeg",
                                         data: imageData
                                     }
+                                },
+
+                                // 🔥 THEN TEXT (VERY IMPORTANT FIX)
+                                {
+                                    text: `
+أنت خبير زراعي محترف جدًا.
+
+حلل صورة النبات بدقة عالية.
+
+أعد فقط JSON بدون أي شرح أو كلام إضافي:
+
+{
+  "disease": "اسم المرض",
+  "confidence": "رقم من 0 إلى 100",
+  "treatment": "العلاج"
+}
+
+إذا لم تكن متأكدًا، حاول الاستنتاج الزراعي ولا ترجع "غير معروف".
+`
                                 }
                             ]
                         }
@@ -74,7 +81,7 @@ app.post("/predict", async (req, res) => {
 
         let text = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
 
-        console.log("RAW RESPONSE:", text);
+        console.log("RAW GEMINI RESPONSE:", text);
 
         // 🧹 تنظيف markdown
         text = text
@@ -87,16 +94,18 @@ app.post("/predict", async (req, res) => {
             return res.json(result);
         } catch (err) {
 
+            console.log("PARSE ERROR:", err.message);
+
             return res.json({
                 disease: "غير معروف",
                 confidence: "0",
-                treatment: text || "لا يوجد تحليل واضح"
+                treatment: "لم يتمكن النموذج من التحليل"
             });
         }
 
     } catch (error) {
 
-        console.log("ERROR:", error.message);
+        console.log("SERVER ERROR:", error.message);
 
         res.status(500).json({
             error: error.message
@@ -104,6 +113,7 @@ app.post("/predict", async (req, res) => {
     }
 });
 
+// 🚀 تشغيل السيرفر
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
