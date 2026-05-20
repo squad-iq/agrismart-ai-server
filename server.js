@@ -1,42 +1,33 @@
 const express = require("express");
-const multer = require("multer");
 const cors = require("cors");
-const fs = require("fs");
 
 const app = express();
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: "20mb" }));
 
-// رفع الصور
-const upload = multer({ dest: "uploads/" });
-
-// مفتاح Gemini من Render Environment Variables
+// 🔑 مفتاح Gemini من Render
 const API_KEY = process.env.GEMINI_API_KEY;
 
-// الصفحة الرئيسية
+// 🟢 اختبار السيرفر
 app.get("/", (req, res) => {
-    res.send("GreenMind API with Gemini 2.0 is running 🚀");
+    res.send("GreenMind API is running 🚀");
 });
 
-// تحليل الصورة
-app.post("/predict", upload.single("image"), async (req, res) => {
+// 🚀 تحليل الصورة
+app.post("/predict", async (req, res) => {
 
     try {
 
-        // التحقق من وجود صورة
-        if (!req.file) {
+        const imageData = req.body.image;
+
+        if (!imageData) {
             return res.status(400).json({
-                error: "No image uploaded"
+                error: "No image provided"
             });
         }
 
-        // قراءة الصورة وتحويلها Base64
-        const imageData = fs.readFileSync(req.file.path, {
-            encoding: "base64"
-        });
-
-        // إرسال الطلب إلى Gemini
+        // 🤖 إرسال إلى Gemini
         const response = await fetch(
             `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`,
             {
@@ -49,12 +40,10 @@ app.post("/predict", upload.single("image"), async (req, res) => {
                         {
                             parts: [
                                 {
-                                    text:
-`أنت خبير زراعي محترف.
+                                    text: `
+أنت خبير زراعي.
 
-حلل صورة النبات.
-
-أعد النتيجة بصيغة JSON فقط بهذا الشكل:
+حلل صورة النبات وأعطني النتيجة بهذا الشكل فقط:
 
 {
   "disease": "",
@@ -78,13 +67,8 @@ app.post("/predict", upload.single("image"), async (req, res) => {
             }
         );
 
-        // تحويل الرد JSON
         const data = await response.json();
 
-        // حذف الصورة المؤقتة
-        fs.unlinkSync(req.file.path);
-
-        // إرسال الرد للتطبيق
         res.json(data);
 
     } catch (error) {
@@ -97,7 +81,7 @@ app.post("/predict", upload.single("image"), async (req, res) => {
 
 });
 
-// تشغيل السيرفر
+// 🚀 تشغيل السيرفر
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
