@@ -1,37 +1,72 @@
 const express = require("express");
 const multer = require("multer");
 const cors = require("cors");
+const fs = require("fs");
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
 
-// تخزين مؤقت للصور
 const upload = multer({ dest: "uploads/" });
 
-// 🔥 اختبار السيرفر
+// 🔑 آمن: من Environment Variable
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+
+// test
 app.get("/", (req, res) => {
-    res.send("GreenMind API is running 🚀");
+    res.send("GreenMind API with Gemini is running 🚀");
 });
 
-// 🔥 مهم: endpoint التحليل
-app.post("/predict", upload.single("image"), (req, res) => {
+app.post("/predict", upload.single("image"), async (req, res) => {
 
-    if (!req.file) {
-        return res.status(400).json({
-            error: "No image uploaded"
+    try {
+
+        if (!req.file) {
+            return res.status(400).json({ error: "No image uploaded" });
+        }
+
+        const imageData = fs.readFileSync(req.file.path, {
+            encoding: "base64"
         });
-    }
 
-    // هنا لاحقًا نربط Gemini أو AI
-    return res.json({
-        result: "تم استلام الصورة بنجاح ✅",
-        filename: req.file.filename
-    });
+        const model = genAI.getGenerativeModel({
+            model: "gemini-1.5-flash"
+        });
+
+        const prompt = `
+أنت خبير زراعي.
+حلل الصورة وأعد JSON فقط:
+{
+  "disease": "",
+  "confidence": "",
+  "treatment": ""
+}
+إذا النبات سليم اكتب healthy.
+`;
+
+        const result = await model.generateContent([
+            {
+                inlineData: {
+                    data: imageData,
+                    mimeType: "image/jpeg"
+                }
+            },
+            prompt
+        ]);
+
+        const text = result.response.text();
+
+        res.json({ result: text });
+
+        fs.unlinkSync(req.file.path);
+
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
 });
 
-// تشغيل السيرفر
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
