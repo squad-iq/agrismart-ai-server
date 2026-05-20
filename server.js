@@ -6,7 +6,6 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: "20mb" }));
 
-// 🔑 مفتاح Gemini من Render
 const API_KEY = process.env.GEMINI_API_KEY;
 
 // 🟢 اختبار السيرفر
@@ -43,15 +42,13 @@ app.post("/predict", async (req, res) => {
                                     text: `
 أنت خبير زراعي.
 
-حلل صورة النبات وأعطني النتيجة بهذا الشكل فقط:
+حلل صورة النبات وأعد فقط JSON بدون أي شرح:
 
 {
-  "disease": "",
-  "confidence": "",
-  "treatment": ""
+  "disease": "اسم المرض",
+  "confidence": "رقم من 0 إلى 100",
+  "treatment": "العلاج"
 }
-
-إذا النبات سليم اكتب healthy.
 `
                                 },
                                 {
@@ -69,16 +66,43 @@ app.post("/predict", async (req, res) => {
 
         const data = await response.json();
 
-        res.json(data);
+        // 🔥 استخراج النص من Gemini
+        let text = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+
+        console.log("RAW GEMINI RESPONSE:", text);
+
+        // 🧹 تنظيف الرد
+        text = text
+            .replace(/```json/g, "")
+            .replace(/```/g, "")
+            .trim();
+
+        let result;
+
+        try {
+            result = JSON.parse(text);
+        } catch (e) {
+            console.log("JSON PARSE ERROR:", e.message);
+
+            return res.json({
+                disease: "غير معروف",
+                confidence: "0",
+                treatment: text || "لا يوجد تحليل واضح"
+            });
+        }
+
+        // 📤 إرسال النتيجة النهائية
+        res.json(result);
 
     } catch (error) {
+
+        console.log("SERVER ERROR:", error.message);
 
         res.status(500).json({
             error: error.message
         });
 
     }
-
 });
 
 // 🚀 تشغيل السيرفر
