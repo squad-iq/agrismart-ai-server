@@ -26,26 +26,14 @@ app.post("/predict", async (req, res) => {
             });
         }
 
-        // 🧹 تنظيف الصورة
+        // 🧹 تنظيف قوي للصورة (حل مشكلة عدم قراءة الصورة)
         imageData = imageData
-            .replace(/^data:image\/\w+;base64,/, "")
+            .replace(/^data:image\/(png|jpeg|jpg);base64,/, "")
+            .replace(/\n/g, "")
+            .replace(/\r/g, "")
             .replace(/\s/g, "");
 
-        const prompt = `
-أنت خبير أمراض نباتات.
-
-حلل الصورة بدقة.
-
-أعد فقط JSON بدون أي شرح:
-
-{
-  "disease": "اسم المرض",
-  "confidence": "0-100",
-  "treatment": "العلاج"
-}
-
-إذا لم تكن متأكدًا، اختر أقرب مرض نباتي.
-`;
+        console.log("IMAGE SIZE:", imageData.length);
 
         const response = await fetch(
             `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`,
@@ -60,13 +48,27 @@ app.post("/predict", async (req, res) => {
                             role: "user",
                             parts: [
                                 {
-                                    text: prompt
-                                },
-                                {
                                     inline_data: {
                                         mime_type: "image/jpeg",
                                         data: imageData
                                     }
+                                },
+                                {
+                                    text: `
+أنت خبير أمراض نباتات محترف.
+
+حلل الصورة بدقة شديدة.
+
+أعد فقط JSON بدون أي شرح:
+
+{
+  "disease": "اسم المرض",
+  "confidence": "0-100",
+  "treatment": "العلاج"
+}
+
+إذا لم تكن متأكدًا، حاول التخمين ولا ترد "غير معروف".
+`
                                 }
                             ]
                         }
@@ -79,23 +81,19 @@ app.post("/predict", async (req, res) => {
 
         let text = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
 
-        console.log("RAW RESPONSE:", text);
+        console.log("RAW GEMINI RESPONSE:", text);
 
         // 🧹 تنظيف الرد
-        text = text
-            .replace(/```json/g, "")
-            .replace(/```/g, "")
-            .trim();
+        text = text.replace(/```json/g, "").replace(/```/g, "").trim();
 
         try {
-            const result = JSON.parse(text);
-            return res.json(result);
+            return res.json(JSON.parse(text));
         } catch (err) {
 
             return res.json({
-                disease: "غير معروف",
+                disease: "تحليل غير دقيق",
                 confidence: "0",
-                treatment: "لم يتمكن النموذج من التحليل"
+                treatment: "حاول صورة أوضح"
             });
         }
 
@@ -109,8 +107,8 @@ app.post("/predict", async (req, res) => {
     }
 });
 
+// 🚀 تشغيل السيرفر
 const PORT = process.env.PORT || 3000;
-
 app.listen(PORT, () => {
     console.log("Server running on port " + PORT);
 });
