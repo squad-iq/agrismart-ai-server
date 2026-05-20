@@ -4,11 +4,11 @@ const cors = require("cors");
 const app = express();
 
 app.use(cors());
-app.use(express.json({ limit: "20mb" }));
+app.use(express.json({ limit: "25mb" }));
 
 const API_KEY = process.env.GEMINI_API_KEY;
 
-// 🟢 اختبار السيرفر
+// 🟢 اختبار
 app.get("/", (req, res) => {
     res.send("GreenMind API is running 🚀");
 });
@@ -25,7 +25,9 @@ app.post("/predict", async (req, res) => {
         }
 
         // 🧹 تنظيف Base64 (مهم جدًا)
-        imageData = imageData.replace(/^data:image\/\w+;base64,/, "");
+        imageData = imageData
+            .replace(/^data:image\/\w+;base64,/, "")
+            .replace(/\s/g, "");
 
         const response = await fetch(
             `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`,
@@ -42,15 +44,17 @@ app.post("/predict", async (req, res) => {
                                     text: `
 أنت خبير زراعي محترف.
 
-حلل صورة النبات وأعد فقط JSON بدون أي شرح:
+حلل صورة النبات بدقة.
+
+أعد فقط JSON بدون أي شرح:
 
 {
-  "disease": "اسم المرض",
+  "disease": "اسم المرض أو healthy",
   "confidence": "رقم من 0 إلى 100",
-  "treatment": "العلاج"
+  "treatment": "العلاج المناسب"
 }
 
-إذا لم تستطع التحديد اكتب disease = "غير معروف".
+إذا لم تستطع التحديد اكتب "غير معروف".
 `
                                 },
                                 {
@@ -68,24 +72,20 @@ app.post("/predict", async (req, res) => {
 
         const data = await response.json();
 
-        // 🧠 استخراج النص من Gemini
         let text = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
 
-        console.log("RAW GEMINI:", text);
+        console.log("RAW RESPONSE:", text);
 
-        // 🧹 تنظيف Markdown
+        // 🧹 تنظيف markdown
         text = text
             .replace(/```json/g, "")
             .replace(/```/g, "")
             .trim();
 
-        // 🔥 محاولة تحويل JSON
         try {
             const result = JSON.parse(text);
             return res.json(result);
         } catch (err) {
-
-            console.log("PARSE ERROR:", err.message);
 
             return res.json({
                 disease: "غير معروف",
@@ -96,7 +96,7 @@ app.post("/predict", async (req, res) => {
 
     } catch (error) {
 
-        console.log("SERVER ERROR:", error.message);
+        console.log("ERROR:", error.message);
 
         res.status(500).json({
             error: error.message
@@ -104,7 +104,6 @@ app.post("/predict", async (req, res) => {
     }
 });
 
-// 🚀 تشغيل السيرفر
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
