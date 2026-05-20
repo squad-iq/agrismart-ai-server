@@ -18,15 +18,15 @@ app.post("/predict", async (req, res) => {
 
     try {
 
-        const imageData = req.body.image;
+        let imageData = req.body.image;
 
         if (!imageData) {
-            return res.status(400).json({
-                error: "No image provided"
-            });
+            return res.status(400).json({ error: "No image provided" });
         }
 
-        // 🤖 إرسال إلى Gemini
+        // 🧹 تنظيف Base64 (مهم جدًا)
+        imageData = imageData.replace(/^data:image\/\w+;base64,/, "");
+
         const response = await fetch(
             `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`,
             {
@@ -40,7 +40,7 @@ app.post("/predict", async (req, res) => {
                             parts: [
                                 {
                                     text: `
-أنت خبير زراعي.
+أنت خبير زراعي محترف.
 
 حلل صورة النبات وأعد فقط JSON بدون أي شرح:
 
@@ -49,6 +49,8 @@ app.post("/predict", async (req, res) => {
   "confidence": "رقم من 0 إلى 100",
   "treatment": "العلاج"
 }
+
+إذا لم تستطع التحديد اكتب disease = "غير معروف".
 `
                                 },
                                 {
@@ -66,23 +68,24 @@ app.post("/predict", async (req, res) => {
 
         const data = await response.json();
 
-        // 🔥 استخراج النص من Gemini
+        // 🧠 استخراج النص من Gemini
         let text = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
 
-        console.log("RAW GEMINI RESPONSE:", text);
+        console.log("RAW GEMINI:", text);
 
-        // 🧹 تنظيف الرد
+        // 🧹 تنظيف Markdown
         text = text
             .replace(/```json/g, "")
             .replace(/```/g, "")
             .trim();
 
-        let result;
-
+        // 🔥 محاولة تحويل JSON
         try {
-            result = JSON.parse(text);
-        } catch (e) {
-            console.log("JSON PARSE ERROR:", e.message);
+            const result = JSON.parse(text);
+            return res.json(result);
+        } catch (err) {
+
+            console.log("PARSE ERROR:", err.message);
 
             return res.json({
                 disease: "غير معروف",
@@ -91,9 +94,6 @@ app.post("/predict", async (req, res) => {
             });
         }
 
-        // 📤 إرسال النتيجة النهائية
-        res.json(result);
-
     } catch (error) {
 
         console.log("SERVER ERROR:", error.message);
@@ -101,7 +101,6 @@ app.post("/predict", async (req, res) => {
         res.status(500).json({
             error: error.message
         });
-
     }
 });
 
