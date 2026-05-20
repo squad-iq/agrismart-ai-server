@@ -1,13 +1,11 @@
 {
   "name": "greenmind-server",
   "version": "1.0.0",
-  "description": "GreenMind AI Plant Analysis Server",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
-    "@google/generative-ai": "latest",
     "cors": "latest",
     "express": "latest",
     "multer": "latest"
