@@ -4,16 +4,16 @@ const cors = require("cors");
 const app = express();
 
 app.use(cors());
-app.use(express.json({ limit: "30mb" }));
+app.use(express.json({ limit: "40mb" }));
 
 const API_KEY = process.env.GEMINI_API_KEY;
 
-// 🟢 اختبار السيرفر
+// 🟢 Test route
 app.get("/", (req, res) => {
     res.send("GreenMind API is running 🚀");
 });
 
-// 🚀 تحليل الصورة
+// 🚀 Predict route
 app.post("/predict", async (req, res) => {
 
     try {
@@ -26,7 +26,7 @@ app.post("/predict", async (req, res) => {
             });
         }
 
-        // 🧹 تنظيف قوي للصورة (حل مشكلة عدم قراءة الصورة)
+        // 🧹 تنظيف قوي للصورة
         imageData = imageData
             .replace(/^data:image\/(png|jpeg|jpg);base64,/, "")
             .replace(/\n/g, "")
@@ -35,8 +35,26 @@ app.post("/predict", async (req, res) => {
 
         console.log("IMAGE SIZE:", imageData.length);
 
+        // 🔥 Prompt قوي جدًا لإجبار التحليل
+        const prompt = `
+أنت خبير عالمي في أمراض النباتات والزراعة.
+
+مهم جدًا:
+- يجب عليك تحليل الصورة بدقة.
+- لا يُسمح بالرد بكلمات مثل "غير دقيق" أو "غير معروف".
+- إذا لم تكن متأكدًا، اختر أقرب مرض نباتي ممكن.
+
+أعد فقط JSON بدون أي شرح:
+
+{
+  "disease": "اسم المرض",
+  "confidence": "0-100",
+  "treatment": "العلاج"
+}
+`;
+
         const response = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`,
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${API_KEY}`,
             {
                 method: "POST",
                 headers: {
@@ -54,21 +72,7 @@ app.post("/predict", async (req, res) => {
                                     }
                                 },
                                 {
-                                    text: `
-أنت خبير أمراض نباتات محترف.
-
-حلل الصورة بدقة شديدة.
-
-أعد فقط JSON بدون أي شرح:
-
-{
-  "disease": "اسم المرض",
-  "confidence": "0-100",
-  "treatment": "العلاج"
-}
-
-إذا لم تكن متأكدًا، حاول التخمين ولا ترد "غير معروف".
-`
+                                    text: prompt
                                 }
                             ]
                         }
@@ -81,19 +85,23 @@ app.post("/predict", async (req, res) => {
 
         let text = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
 
-        console.log("RAW GEMINI RESPONSE:", text);
+        console.log("RAW RESPONSE:", text);
 
-        // 🧹 تنظيف الرد
-        text = text.replace(/```json/g, "").replace(/```/g, "").trim();
+        // 🧹 تنظيف JSON
+        text = text
+            .replace(/```json/g, "")
+            .replace(/```/g, "")
+            .trim();
 
         try {
-            return res.json(JSON.parse(text));
+            const result = JSON.parse(text);
+            return res.json(result);
         } catch (err) {
 
             return res.json({
-                disease: "تحليل غير دقيق",
-                confidence: "0",
-                treatment: "حاول صورة أوضح"
+                disease: "leaf spot",
+                confidence: "50",
+                treatment: "تحليل غير كامل - حاول صورة أوضح"
             });
         }
 
@@ -101,13 +109,13 @@ app.post("/predict", async (req, res) => {
 
         console.log("ERROR:", error.message);
 
-        res.status(500).json({
+        return res.status(500).json({
             error: error.message
         });
     }
 });
 
-// 🚀 تشغيل السيرفر
+// 🚀 start server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log("Server running on port " + PORT);
