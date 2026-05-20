@@ -2,7 +2,6 @@ const express = require("express");
 const multer = require("multer");
 const cors = require("cors");
 const fs = require("fs");
-const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 const app = express();
 
@@ -11,60 +10,82 @@ app.use(express.json());
 
 const upload = multer({ dest: "uploads/" });
 
-// 🔑 آمن: من Environment Variable
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const API_KEY = process.env.GEMINI_API_KEY;
 
-// test
+// اختبار السيرفر
 app.get("/", (req, res) => {
-    res.send("GreenMind API with Gemini is running 🚀");
+    res.send("GreenMind API with Gemini REST is running 🚀");
 });
 
+// تحليل الصورة
 app.post("/predict", upload.single("image"), async (req, res) => {
 
     try {
 
         if (!req.file) {
-            return res.status(400).json({ error: "No image uploaded" });
+            return res.status(400).json({
+                error: "No image uploaded"
+            });
         }
 
+        // تحويل الصورة Base64
         const imageData = fs.readFileSync(req.file.path, {
             encoding: "base64"
         });
 
-        const model = genAI.getGenerativeModel({
-            model: "gemini-1.5-flash"
-        });
-
-        const prompt = `
+        // إرسال مباشر إلى Gemini REST API
+        const response = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`,
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    contents: [
+                        {
+                            parts: [
+                                {
+                                    text: `
 أنت خبير زراعي.
-حلل الصورة وأعد JSON فقط:
+حلل صورة النبات.
+أجب بصيغة JSON فقط:
 {
   "disease": "",
   "confidence": "",
   "treatment": ""
 }
 إذا النبات سليم اكتب healthy.
-`;
+`
+                                },
+                                {
+                                    inline_data: {
+                                        mime_type: "image/jpeg",
+                                        data: imageData
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                })
+            }
+        );
 
-        const result = await model.generateContent([
-            {
-                inlineData: {
-                    data: imageData,
-                    mimeType: "image/jpeg"
-                }
-            },
-            prompt
-        ]);
+        const data = await response.json();
 
-        const text = result.response.text();
+        res.json(data);
 
-        res.json({ result: text });
-
+        // حذف الصورة المؤقتة
         fs.unlinkSync(req.file.path);
 
     } catch (error) {
-        res.status(500).json({ error: error.message });
+
+        res.status(500).json({
+            error: error.message
+        });
+
     }
+
 });
 
 const PORT = process.env.PORT || 3000;
