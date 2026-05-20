@@ -4,7 +4,7 @@ const cors = require("cors");
 const app = express();
 
 app.use(cors());
-app.use(express.json({ limit: "25mb" }));
+app.use(express.json({ limit: "30mb" }));
 
 const API_KEY = process.env.GEMINI_API_KEY;
 
@@ -26,13 +26,29 @@ app.post("/predict", async (req, res) => {
             });
         }
 
-        // 🧹 تنظيف Base64
+        // 🧹 تنظيف الصورة
         imageData = imageData
             .replace(/^data:image\/\w+;base64,/, "")
             .replace(/\s/g, "");
 
+        const prompt = `
+أنت خبير أمراض نباتات.
+
+حلل الصورة بدقة.
+
+أعد فقط JSON بدون أي شرح:
+
+{
+  "disease": "اسم المرض",
+  "confidence": "0-100",
+  "treatment": "العلاج"
+}
+
+إذا لم تكن متأكدًا، اختر أقرب مرض نباتي.
+`;
+
         const response = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`,
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`,
             {
                 method: "POST",
                 headers: {
@@ -43,32 +59,14 @@ app.post("/predict", async (req, res) => {
                         {
                             role: "user",
                             parts: [
-
-                                // 🔥 IMPORTANT: IMAGE FIRST
+                                {
+                                    text: prompt
+                                },
                                 {
                                     inline_data: {
                                         mime_type: "image/jpeg",
                                         data: imageData
                                     }
-                                },
-
-                                // 🔥 THEN TEXT (VERY IMPORTANT FIX)
-                                {
-                                    text: `
-أنت خبير زراعي محترف جدًا.
-
-حلل صورة النبات بدقة عالية.
-
-أعد فقط JSON بدون أي شرح أو كلام إضافي:
-
-{
-  "disease": "اسم المرض",
-  "confidence": "رقم من 0 إلى 100",
-  "treatment": "العلاج"
-}
-
-إذا لم تكن متأكدًا، حاول الاستنتاج الزراعي ولا ترجع "غير معروف".
-`
                                 }
                             ]
                         }
@@ -81,9 +79,9 @@ app.post("/predict", async (req, res) => {
 
         let text = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
 
-        console.log("RAW GEMINI RESPONSE:", text);
+        console.log("RAW RESPONSE:", text);
 
-        // 🧹 تنظيف markdown
+        // 🧹 تنظيف الرد
         text = text
             .replace(/```json/g, "")
             .replace(/```/g, "")
@@ -94,8 +92,6 @@ app.post("/predict", async (req, res) => {
             return res.json(result);
         } catch (err) {
 
-            console.log("PARSE ERROR:", err.message);
-
             return res.json({
                 disease: "غير معروف",
                 confidence: "0",
@@ -105,7 +101,7 @@ app.post("/predict", async (req, res) => {
 
     } catch (error) {
 
-        console.log("SERVER ERROR:", error.message);
+        console.log("ERROR:", error.message);
 
         res.status(500).json({
             error: error.message
@@ -113,7 +109,6 @@ app.post("/predict", async (req, res) => {
     }
 });
 
-// 🚀 تشغيل السيرفر
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
