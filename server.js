@@ -1,64 +1,39 @@
 const express = require("express");
+const multer = require("multer");
 const cors = require("cors");
 
 const app = express();
 
-// Middleware
 app.use(cors());
-app.use(express.json({ limit: "10mb" }));
+app.use(express.json());
 
-// ======================
-// 🟢 Main Route
-// ======================
+// تخزين مؤقت للصور
+const upload = multer({ dest: "uploads/" });
+
+// 🔥 اختبار السيرفر
 app.get("/", (req, res) => {
-  res.status(200).send("🌿 AgriSmart API is running");
+    res.send("GreenMind API is running 🚀");
 });
 
-// ======================
-// 🟢 Health Check
-// ======================
-app.get("/health", (req, res) => {
-  res.status(200).json({
-    status: "ok",
-    message: "Server is healthy"
-  });
-});
+// 🔥 مهم: endpoint التحليل
+app.post("/predict", upload.single("image"), (req, res) => {
 
-// ======================
-// 🟢 Analyze Image API
-// ======================
-app.post("/analyze", (req, res) => {
-  try {
-    const { image } = req.body;
-
-    if (!image) {
-      return res.status(400).json({
-        success: false,
-        message: "No image provided"
-      });
+    if (!req.file) {
+        return res.status(400).json({
+            error: "No image uploaded"
+        });
     }
 
-    // هنا لاحقًا نربط AI (Gemini أو أي ذكاء)
-    return res.status(200).json({
-      success: true,
-      message: "Image received successfully",
-      imageSize: image.length,
-      result: "processing_done"
+    // هنا لاحقًا نربط Gemini أو AI
+    return res.json({
+        result: "تم استلام الصورة بنجاح ✅",
+        filename: req.file.filename
     });
-
-  } catch (error) {
-    return res.status(500).json({
-      success: false,
-      error: error.message
-    });
-  }
 });
 
-// ======================
-// 🟢 Start Server
-// ======================
+// تشغيل السيرفر
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
-  console.log("🚀 Server running on port " + PORT);
+    console.log("Server running on port " + PORT);
 });
