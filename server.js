@@ -9,28 +9,34 @@ app.use(express.json({ limit: "50mb" }));
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
-// 🟢 test route
+// 🟢 health check (مهم لتجنب sleep)
 app.get("/", (req, res) => {
     res.send("API is running 🚀");
 });
 
-// 🚀 predict route
+// 🟢 keep alive ping
+app.get("/ping", (req, res) => {
+    res.send("alive");
+});
+
+// 🚀 predict
 app.post("/predict", async (req, res) => {
+
+    console.log("📥 request received");
 
     try {
 
         let imageData = req.body.image;
 
         if (!imageData) {
-            return res.status(400).json({
-                error: "No image provided"
-            });
+            return res.status(400).json({ error: "No image provided" });
         }
 
-        // تنظيف الصورة
         imageData = imageData
             .replace(/^data:image\/(png|jpeg|jpg);base64,/, "")
             .replace(/\s/g, "");
+
+        console.log("🤖 calling OpenRouter...");
 
         const response = await axios.post(
             "https://openrouter.ai/api/v1/chat/completions",
@@ -43,14 +49,10 @@ app.post("/predict", async (req, res) => {
                             {
                                 type: "text",
                                 text: `
-أنت خبير أمراض نباتات.
-
-حلل الصورة وحدد:
+حلل مرض النبات في الصورة وأعطني:
 - اسم المرض
 - نسبة الثقة
 - العلاج
-
-إذا لم تكن متأكدًا اختر أقرب مرض.
 `
                             },
                             {
@@ -67,7 +69,8 @@ app.post("/predict", async (req, res) => {
                 headers: {
                     "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
                     "Content-Type": "application/json"
-                }
+                },
+                timeout: 90000
             }
         );
 
@@ -75,8 +78,10 @@ app.post("/predict", async (req, res) => {
             response.data?.choices?.[0]?.message?.content
             || "لا توجد نتيجة";
 
+        console.log("📤 response sent");
+
         return res.json({
-            result: result,
+            result,
             disease: result,
             confidence: "غير محدد",
             treatment: "راجع النص"
@@ -84,7 +89,7 @@ app.post("/predict", async (req, res) => {
 
     } catch (error) {
 
-        console.log(error.response?.data || error.message);
+        console.log("ERROR:", error.response?.data || error.message);
 
         return res.status(500).json({
             error: error.response?.data || error.message
