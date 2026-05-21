@@ -12,7 +12,8 @@ const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
 // 🟢 test
 app.get("/", (req, res) => {
-    res.send("GreenMind OpenRouter API is running 🚀");
+    res.send("API is running 🚀");
+});
 });
 
 // 🚀 تحليل الصورة
