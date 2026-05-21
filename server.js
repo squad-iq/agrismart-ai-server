@@ -11,11 +11,18 @@ const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
 // 🟢 health check
 app.get("/", (req, res) => {
-    res.send("API running 🚀");
+    res.send("GreenMind API is running 🚀");
+});
+
+// 🟢 ping (prevent sleep on Render)
+app.get("/ping", (req, res) => {
+    res.send("alive");
 });
 
 // 🚀 predict endpoint
 app.post("/predict", async (req, res) => {
+
+    console.log("📥 Request received");
 
     try {
 
@@ -29,9 +36,12 @@ app.post("/predict", async (req, res) => {
             });
         }
 
+        // تنظيف الصورة
         imageData = imageData
             .replace(/^data:image\/(png|jpeg|jpg);base64,/, "")
             .replace(/\s/g, "");
+
+        console.log("🤖 Sending to AI...");
 
         const response = await axios.post(
             "https://openrouter.ai/api/v1/chat/completions",
@@ -42,25 +52,25 @@ app.post("/predict", async (req, res) => {
                     {
                         role: "system",
                         content: `
-أنت خبير أمراض نباتات.
+أنت خبير زراعي متخصص جدًا في أمراض النباتات.
 
 ⚠️ قواعد صارمة:
-- لا تكتب أي شرح
-- لا تستخدم أي لغة غير JSON
+- لا تكتب شرح
+- لا تكتب نص إضافي
 - أعد فقط JSON صحيح
 
 الصيغة:
 {
-  "disease": "اسم المرض",
-  "confidence": "رقم فقط",
-  "treatment": "علاج مختصر"
+  "disease": "اسم المرض أو صحي",
+  "confidence": "رقم من 0 إلى 100",
+  "treatment": "علاج مختصر وواضح"
 }
 
-إذا غير واضح:
+إذا الصورة غير واضحة:
 {
   "disease": "غير معروف",
   "confidence": "0",
-  "treatment": "لا يوجد تحليل واضح"
+  "treatment": "حاول صورة أوضح"
 }
 `
                     },
@@ -95,23 +105,27 @@ app.post("/predict", async (req, res) => {
                    .replace(/```/g, "")
                    .trim();
 
-        let parsed;
+        let result;
 
         try {
-            parsed = JSON.parse(text);
+            result = JSON.parse(text);
         } catch (e) {
-            parsed = {
+            console.log("⚠️ JSON parse failed:", text);
+
+            result = {
                 disease: "تحليل غير دقيق",
                 confidence: "0",
                 treatment: "حاول صورة أوضح"
             };
         }
 
-        return res.json(parsed);
+        console.log("📤 Response sent");
+
+        return res.json(result);
 
     } catch (error) {
 
-        console.log(error.response?.data || error.message);
+        console.log("❌ ERROR:", error.response?.data || error.message);
 
         return res.status(500).json({
             disease: "خطأ في السيرفر",
@@ -121,6 +135,7 @@ app.post("/predict", async (req, res) => {
     }
 });
 
+// 🚀 start server
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
