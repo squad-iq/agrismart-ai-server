@@ -7,14 +7,15 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: "50mb" }));
 
-const API_KEY = process.env.GEMINI_API_KEY;
+// 🔑 ضع مفتاح OpenRouter هنا أو في Render ENV
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
-// اختبار
+// 🟢 test
 app.get("/", (req, res) => {
-    res.send("GreenMind API is running 🚀");
+    res.send("GreenMind OpenRouter API is running 🚀");
 });
 
-// تحليل الصورة
+// 🚀 تحليل الصورة
 app.post("/predict", async (req, res) => {
 
     try {
@@ -23,59 +24,71 @@ app.post("/predict", async (req, res) => {
 
         if (!imageData) {
             return res.status(400).json({
-                error: "No image"
+                error: "No image provided"
             });
         }
 
-        // تنظيف base64
+        // تنظيف الصورة
         imageData = imageData
             .replace(/^data:image\/(png|jpeg|jpg);base64,/, "")
             .replace(/\s/g, "");
 
-        const url =
-            `https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash-lite:generateContent?key=${API_KEY}`;
+        const response = await axios.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            {
+                model: "meta-llama/llama-3.2-11b-vision-instruct",
+                messages: [
+                    {
+                        role: "user",
+                        content: [
+                            {
+                                type: "text",
+                                text: `
+أنت خبير أمراض نباتات.
 
-        const requestBody = {
-            contents: [
-                {
-                    parts: [
-                        {
-                            inlineData: {
-                                mimeType: "image/jpeg",
-                                data: imageData
+حلل هذه الصورة وحدد:
+- اسم المرض
+- نسبة الثقة
+- العلاج
+
+إذا لم تكن متأكدًا اختر أقرب مرض نباتي.
+`
+                            },
+                            {
+                                type: "image_url",
+                                image_url: {
+                                    url: "data:image/jpeg;base64," + imageData
+                                }
                             }
-                        },
-                        {
-                            text: "حلل مرض النبات في الصورة واذكر المرض والعلاج باختصار"
-                        }
-                    ]
+                        ]
+                    }
+                ]
+            },
+            {
+                headers: {
+                    "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
+                    "Content-Type": "application/json"
                 }
-            ]
-        };
-
-        const response = await axios.post(url, requestBody, {
-            headers: {
-                "Content-Type": "application/json"
             }
-        });
+        );
 
-        const text =
-            response.data?.candidates?.[0]?.content?.parts?.[0]?.text
+        const result =
+            response.data?.choices?.[0]?.message?.content
             || "لا توجد نتيجة";
 
-        console.log("GEMINI:", text);
+        console.log("OPENROUTER:", result);
 
+        // نحاول استخراج بيانات بسيطة
         return res.json({
-            disease: text,
-            confidence: "90",
-            treatment: "تم التحليل"
+            result: result,
+            disease: result,
+            confidence: "غير محدد",
+            treatment: "راجع النص"
         });
 
     } catch (error) {
 
-        console.log(
-            error.response?.data || error.message
-        );
+        console.log(error.response?.data || error.message);
 
         return res.status(500).json({
             error: error.response?.data || error.message
