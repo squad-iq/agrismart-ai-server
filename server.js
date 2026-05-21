@@ -9,52 +9,64 @@ app.use(express.json({ limit: "50mb" }));
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
-// 🟢 health check (مهم لتجنب sleep)
+// 🟢 health check
 app.get("/", (req, res) => {
-    res.send("API is running 🚀");
+    res.send("API running 🚀");
 });
 
-// 🟢 keep alive ping
-app.get("/ping", (req, res) => {
-    res.send("alive");
-});
-
-// 🚀 predict
+// 🚀 predict endpoint
 app.post("/predict", async (req, res) => {
-
-    console.log("📥 request received");
 
     try {
 
         let imageData = req.body.image;
 
         if (!imageData) {
-            return res.status(400).json({ error: "No image provided" });
+            return res.status(400).json({
+                disease: "غير معروف",
+                confidence: "0",
+                treatment: "لا توجد صورة"
+            });
         }
 
         imageData = imageData
             .replace(/^data:image\/(png|jpeg|jpg);base64,/, "")
             .replace(/\s/g, "");
 
-        console.log("🤖 calling OpenRouter...");
-
         const response = await axios.post(
             "https://openrouter.ai/api/v1/chat/completions",
             {
                 model: "meta-llama/llama-3.2-11b-vision-instruct",
+
                 messages: [
+                    {
+                        role: "system",
+                        content: `
+أنت خبير أمراض نباتات.
+
+⚠️ قواعد صارمة:
+- لا تكتب أي شرح
+- لا تستخدم أي لغة غير JSON
+- أعد فقط JSON صحيح
+
+الصيغة:
+{
+  "disease": "اسم المرض",
+  "confidence": "رقم فقط",
+  "treatment": "علاج مختصر"
+}
+
+إذا غير واضح:
+{
+  "disease": "غير معروف",
+  "confidence": "0",
+  "treatment": "لا يوجد تحليل واضح"
+}
+`
+                    },
                     {
                         role: "user",
                         content: [
-                            {
-                                type: "text",
-                                text: `
-حلل مرض النبات في الصورة وأعطني:
-- اسم المرض
-- نسبة الثقة
-- العلاج
-`
-                            },
                             {
                                 type: "image_url",
                                 image_url: {
@@ -63,7 +75,9 @@ app.post("/predict", async (req, res) => {
                             }
                         ]
                     }
-                ]
+                ],
+
+                temperature: 0.2
             },
             {
                 headers: {
@@ -74,25 +88,35 @@ app.post("/predict", async (req, res) => {
             }
         );
 
-        const result =
-            response.data?.choices?.[0]?.message?.content
-            || "لا توجد نتيجة";
+        let text = response.data?.choices?.[0]?.message?.content || "{}";
 
-        console.log("📤 response sent");
+        // 🧹 تنظيف أي markdown
+        text = text.replace(/```json/g, "")
+                   .replace(/```/g, "")
+                   .trim();
 
-        return res.json({
-            result,
-            disease: result,
-            confidence: "غير محدد",
-            treatment: "راجع النص"
-        });
+        let parsed;
+
+        try {
+            parsed = JSON.parse(text);
+        } catch (e) {
+            parsed = {
+                disease: "تحليل غير دقيق",
+                confidence: "0",
+                treatment: "حاول صورة أوضح"
+            };
+        }
+
+        return res.json(parsed);
 
     } catch (error) {
 
-        console.log("ERROR:", error.response?.data || error.message);
+        console.log(error.response?.data || error.message);
 
         return res.status(500).json({
-            error: error.response?.data || error.message
+            disease: "خطأ في السيرفر",
+            confidence: "0",
+            treatment: "حاول مرة أخرى"
         });
     }
 });
