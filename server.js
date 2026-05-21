@@ -7,16 +7,14 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: "50mb" }));
 
-// 🔑 ضع مفتاح OpenRouter هنا أو في Render ENV
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
-// 🟢 test
+// 🟢 test route
 app.get("/", (req, res) => {
     res.send("API is running 🚀");
 });
-});
 
-// 🚀 تحليل الصورة
+// 🚀 predict route
 app.post("/predict", async (req, res) => {
 
     try {
@@ -47,12 +45,12 @@ app.post("/predict", async (req, res) => {
                                 text: `
 أنت خبير أمراض نباتات.
 
-حلل هذه الصورة وحدد:
+حلل الصورة وحدد:
 - اسم المرض
 - نسبة الثقة
 - العلاج
 
-إذا لم تكن متأكدًا اختر أقرب مرض نباتي.
+إذا لم تكن متأكدًا اختر أقرب مرض.
 `
                             },
                             {
@@ -77,9 +75,6 @@ app.post("/predict", async (req, res) => {
             response.data?.choices?.[0]?.message?.content
             || "لا توجد نتيجة";
 
-        console.log("OPENROUTER:", result);
-
-        // نحاول استخراج بيانات بسيطة
         return res.json({
             result: result,
             disease: result,
