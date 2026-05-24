@@ -20,9 +20,14 @@ app.post("/predict", async (req, res) => {
             generationConfig: { responseMimeType: "application/json", temperature: 0.7 }
         });
 
-        const prompt = `حلل الصورة بدقة متناهية. حدد نوع النبات، المرض، نسبة الدقة (0-100)، وعلاج مفصل.
-        أجب فقط بتنسيق JSON:
-        {"plant": "اسم النبات", "disease": "اسم المرض", "confidence": "رقم", "treatment": "العلاج"}`;
+        const prompt = `أنت خبير زراعي. حلل الصورة المرفقة.
+1. حدد نوع النبات.
+2. حدد المرض أو الآفة (إذا كانت الصورة عامة، خمن بناءً على الخضرة والمظهر العام).
+3. اعطِ نسبة ثقة واقعية (لا تستخدم 0%).
+4. اعطِ نصيحة علاجية مفصلة.
+
+أجب فقط بتنسيق JSON:
+{"plant": "اسم النبات", "disease": "التشخيص", "confidence": "نسبة", "treatment": "العلاج"}`;
 
         const result = await model.generateContent([
             prompt, { inlineData: { data: imageData, mimeType: "image/jpeg" } }
