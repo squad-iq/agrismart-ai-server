@@ -15,20 +15,21 @@ app.post("/predict", async (req, res) => {
         if (!imageData) return res.status(400).json({ error: "لا توجد صورة" });
         if (imageData.includes("base64,")) imageData = imageData.split("base64,")[1];
 
-        const model = genAI.getGenerativeModel({ 
-            model: "gemini-1.5-pro",
-            generationConfig: { responseMimeType: "application/json", temperature: 0.8 }
-        });
+        // في server.js
+const model = genAI.getGenerativeModel({ 
+    model: "gemini-1.5-flash", // هذا الموديل أسرع وأقل "تحفظاً" في الرؤية البصرية
+    generationConfig: { responseMimeType: "application/json", temperature: 0.9 }
+});
 
-        const prompt = `أنت خبير زراعي عالمي. حلل الصورة المرفقة بتركيز عالٍ.
-        1. "plant": حدد اسم النبات.
-        2. "disease": شخص حالة النبات (بقع، ثقوب، نقص عناصر، أو نبات سليم).
-        3. "confidence": اعطِ نسبة ثقة بين 65 و 99.
-        4. "treatment": قدم إجراءً علاجياً محدداً.
+const prompt = `أنت خبير زراعي متخصص. حلل الصورة المرفقة بتمعن:
+1. صِف الظواهر البصرية التي تراها في الصورة (بقع، ثقوب، تلون، حشرات).
+2. بناءً على وصفك، حدد نوع النبات والمرض المحتمل.
+3. قدم نسبة ثقة.
+4. اقترح علاجاً.
 
-        تحذير: لا تقل "غير معروف". ابذل قصارى جهدك للتحليل بناءً على الأنماط البصرية.
-        أجب فقط بتنسيق JSON:
-        {"plant": "...", "disease": "...", "confidence": "...", "treatment": "..."}`;
+ملاحظة: لا تعتذر ولا تقل "لا يمكن التحليل". حتى لو كانت الصورة عامة، قدم أفضل استنتاج بناءً على ما تراه.
+أجب بتنسيق JSON:
+{"plant": "...", "disease": "...", "confidence": "...", "treatment": "..."}`;
 
         const result = await model.generateContent([
             prompt, { inlineData: { data: imageData, mimeType: "image/jpeg" } }
