@@ -19,7 +19,7 @@ app.post("/predict", async (req, res) => {
         if (imageData.includes("base64,")) imageData = imageData.split("base64,")[1];
 
         // استخدام الموديل الأقوى Pro للحصول على أفضل دقة تشخيصية
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
+        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
 
         // برومبت مُحسن لإجبار الذكاء الاصطناعي على التشخيص
         const prompt = `أنت عالم نبات وخبير زراعي. 
