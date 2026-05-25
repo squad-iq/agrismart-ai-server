@@ -1,13 +1,13 @@
 {
   "name": "agrismart-ai-server",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Plant Diagnosis AI Server",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
-    "@google/generative-ai": "^0.11.0",
+    "@google/generative-ai": "0.12.0",
     "cors": "^2.8.5",
     "express": "^4.19.2"
   }
