@@ -6,27 +6,26 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: "50mb" }));
 
-// جلب المفتاح
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-
 app.post("/predict", async (req, res) => {
     try {
         const { image } = req.body;
+        // التأكد من وجود المفتاح في كل طلب لضمان عدم ضياعه
+        const apiKey = process.env.GEMINI_API_KEY;
         
-        // إجبار السيرفر على استخدام نسخة v1 المستقرة
-        const model = genAI.getGenerativeModel(
-            { model: "gemini-1.5-flash" },
-            { apiVersion: "v1" } 
-        );
+        if (!apiKey || apiKey.length < 10) {
+            return res.status(200).json({ 
+                plant: "error", 
+                disease: "المفتاح غير موجود في Render", 
+                confidence: "0", 
+                treatment: "يرجى إضافة GEMINI_API_KEY في Environment Variables" 
+            });
+        }
 
-        const prompt = `أنت خبير نباتات. حلل الصورة وأجب بصيغة JSON فقط:
-        {
-          "plant": "اسم النبات أو error إذا لم يكن نباتاً",
-          "disease": "التشخيص",
-          "confidence": "نسبة الدقة كرقيم فقط",
-          "treatment": "العلاج"
-        }`;
+        const genAI = new GoogleGenerativeAI(apiKey);
+        // استخدام الموديل بدون تحديد نسخة API لترك المكتبة تختار الأحدث تلقائياً
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
+        const prompt = `تحليل نبات، الرد JSON فقط: {"plant":"..", "disease":"..", "confidence":"..", "treatment":".."}`;
         const imageData = image.includes("base64,") ? image.split("base64,")[1] : image;
 
         const result = await model.generateContent([
@@ -39,12 +38,13 @@ app.post("/predict", async (req, res) => {
         res.json(JSON.parse(jsonMatch[0]));
 
     } catch (error) {
-        console.error("CRITICAL ERROR:", error.message);
-        res.status(500).json({ 
+        console.error("LOG:", error.message);
+        // إرسال تفاصيل الخطأ الحقيقية بدلاً من 500
+        res.json({ 
             plant: "error", 
-            disease: "Error: " + error.message, 
+            disease: "تفاصيل الخطأ: " + error.message, 
             confidence: "0", 
-            treatment: "تأكد من مسح الـ Cache في Render" 
+            treatment: "راجع سجلات السيرفر" 
         });
     }
 });
@@ -52,12 +52,11 @@ app.post("/predict", async (req, res) => {
 // روابط الشات
 app.post("/chat", async (req, res) => {
     try {
-        const { message } = req.body;
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" }, { apiVersion: "v1" });
-        const result = await model.generateContent(message);
+        const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        const result = await model.generateContent(req.body.message);
         res.json({ reply: result.response.text() });
-    } catch (e) { res.status(500).json({ reply: "تعذر الاتصال" }); }
+    } catch (e) { res.json({ reply: "مشكلة في المفتاح" }); }
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log("Server is running on V1..."));
+app.listen(process.env.PORT || 3000, () => console.log("Server Debug Mode Live"));
