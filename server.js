@@ -9,23 +9,26 @@ app.use(express.json({ limit: "50mb" }));
 app.post("/predict", async (req, res) => {
     try {
         const { image } = req.body;
-        // التأكد من وجود المفتاح في كل طلب لضمان عدم ضياعه
         const apiKey = process.env.GEMINI_API_KEY;
-        
-        if (!apiKey || apiKey.length < 10) {
-            return res.status(200).json({ 
-                plant: "error", 
-                disease: "المفتاح غير موجود في Render", 
-                confidence: "0", 
-                treatment: "يرجى إضافة GEMINI_API_KEY في Environment Variables" 
-            });
+
+        if (!apiKey) {
+            return res.json({ plant: "error", disease: "المفتاح (GEMINI_API_KEY) غير مضاف في إعدادات Render" });
         }
 
         const genAI = new GoogleGenerativeAI(apiKey);
-        // استخدام الموديل بدون تحديد نسخة API لترك المكتبة تختار الأحدث تلقائياً
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        
+        // تغيير الموديل إلى Pro كما طلبت لتحسين النتائج
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
 
-        const prompt = `تحليل نبات، الرد JSON فقط: {"plant":"..", "disease":"..", "confidence":"..", "treatment":".."}`;
+        const prompt = `أنت خبير نباتات محترف. حلل الصورة المرفقة وأجب بصيغة JSON فقط بهذه الحقول:
+        {
+          "plant": "اسم النبات باللغة العربية",
+          "disease": "التشخيص (سليم أو اسم المرض)",
+          "confidence": "نسبة الدقة كرقيم فقط بين 0-100",
+          "treatment": "خطوات العلاج بالتفصيل"
+        }
+        إذا لم تكن الصورة لنبات أو ورقة شجر، اجعل قيمة plant هي "error".`;
+
         const imageData = image.includes("base64,") ? image.split("base64,")[1] : image;
 
         const result = await model.generateContent([
@@ -33,30 +36,46 @@ app.post("/predict", async (req, res) => {
             { inlineData: { data: imageData, mimeType: "image/jpeg" } }
         ]);
 
-        const text = result.response.text();
+        const response = await result.response;
+        const text = response.text();
+        
+        // تنظيف الرد لاستخراج JSON فقط
         const jsonMatch = text.match(/\{[\s\S]*\}/);
-        res.json(JSON.parse(jsonMatch[0]));
+        if (jsonMatch) {
+            res.json(JSON.parse(jsonMatch[0]));
+        } else {
+            throw new Error("لم يتمكن الذكاء الاصطناعي من تنسيق الرد بشكل صحيح");
+        }
 
     } catch (error) {
-        console.error("LOG:", error.message);
-        // إرسال تفاصيل الخطأ الحقيقية بدلاً من 500
+        console.error("Detailed Error:", error.message);
+        
+        // رسائل خطأ ذكية للمستخدم
+        let userMessage = "حدث خطأ غير متوقع";
+        if (error.message.includes("API key not valid")) {
+            userMessage = "مفتاح API غير صالح. تأكد من نسخه من Google AI Studio ولصقه في Render بدون مسافات.";
+        } else if (error.message.includes("location is not supported")) {
+            userMessage = "منطقة السيرفر الجغرافية غير مدعومة من جوجل Gemini حالياً.";
+        }
+
         res.json({ 
             plant: "error", 
-            disease: "تفاصيل الخطأ: " + error.message, 
+            disease: userMessage, 
             confidence: "0", 
-            treatment: "راجع سجلات السيرفر" 
+            treatment: "الرجاء التأكد من إعدادات السيرفر والمفتاح." 
         });
     }
 });
 
-// روابط الشات
+// تفعيل الشات أيضاً بالموديل الجديد
 app.post("/chat", async (req, res) => {
     try {
         const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
         const result = await model.generateContent(req.body.message);
         res.json({ reply: result.response.text() });
-    } catch (e) { res.json({ reply: "مشكلة في المفتاح" }); }
+    } catch (e) { res.json({ reply: "عذراً، واجهت مشكلة في الرد." }); }
 });
 
-app.listen(process.env.PORT || 3000, () => console.log("Server Debug Mode Live"));
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Server running with Gemini Pro on port ${PORT}`));
