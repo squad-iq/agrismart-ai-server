@@ -1,44 +1,62 @@
 const express = require("express");
 const cors = require("cors");
-const axios = require("axios");
+const OpenAI = require("openai");
 
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: "50mb" }));
 
+// إعداد OpenAI بالمفتاح الجديد
+const openai = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+});
+
 app.post("/predict", async (req, res) => {
     try {
         const { image } = req.body;
-        const apiKey = process.env.GEMINI_API_KEY;
-        const imageData = image.includes("base64,") ? image.split("base64,")[1] : image;
+        if (!image) return res.status(400).json({ error: "Image is required" });
 
-        // جربنا 1.5 وفشل، الآن سنستخدم gemini-pro-vision وهو الموديل الأكثر استقراراً للصور
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro-vision:generateContent?key=${apiKey}`;
-        
-        const response = await axios.post(url, {
-            contents: [{
-                parts: [
-                    { text: "تحليل نبات، الرد JSON فقط: {'plant':'..', 'disease':'..', 'confidence':'..', 'treatment':'..'}" },
-                    { inline_data: { mime_type: "image/jpeg", data: imageData } }
-                ]
-            }]
+        const base64Image = image.includes("base64,") ? image : `data:image/jpeg;base64,${image}`;
+
+        const response = await openai.chat.completions.create({
+            model: "gpt-4o-mini",
+            messages: [
+                {
+                    role: "user",
+                    content: [
+                        { type: "text", text: "أنت خبير نباتات. حلل الصورة وأجب بصيغة JSON فقط باللغة العربية: {\"plant\": \"اسم النبات\", \"disease\": \"التشخيص\", \"confidence\": \"الدقة كرقيم\", \"treatment\": \"العلاج\"}. إذا لم تكن لنبات، اجعل plant قيمتها error." },
+                        {
+                            type: "image_url",
+                            image_url: { "url": base64Image },
+                        },
+                    ],
+                },
+            ],
+            response_format: { type: "json_object" }, // إجبار الموديل على إعطاء JSON
         });
 
-        const text = response.data.candidates[0].content.parts[0].text;
-        res.json(JSON.parse(text.match(/\{[\s\S]*\}/)[0]));
+        res.json(JSON.parse(response.choices[0].message.content));
 
     } catch (error) {
-        // إذا فشل الموديل القديم، سنحاول مع الموديل الجديد بصيغة مختلفة
-        try {
-             const urlFlash = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${process.env.GEMINI_API_KEY}`;
-             const resFlash = await axios.post(urlFlash, {
-                 contents: [{ parts: [{ text: "تحليل نبات JSON" }, { inline_data: { mime_type: "image/jpeg", data: image.split("base64,")[1] || image } }] }]
-             });
-             res.json(JSON.parse(resFlash.data.candidates[0].content.parts[0].text.match(/\{[\s\S]*\}/)[0]));
-        } catch (e) {
-            res.json({ plant: "error", disease: "جوجل يرفض الطلب (404/400). تأكد أن المفتاح من AI Studio وليس Cloud." });
-        }
+        console.error("OpenAI Error:", error.message);
+        res.status(500).json({ 
+            plant: "error", 
+            disease: "خطأ في الاتصال بـ OpenAI", 
+            confidence: "0", 
+            treatment: "تأكد من شحن رصيد في حساب OpenAI الخاص بك." 
+        });
     }
 });
 
-app.listen(process.env.PORT || 3000, () => console.log("Stable Mode Live"));
+app.post("/chat", async (req, res) => {
+    try {
+        const response = await openai.chat.completions.create({
+            model: "gpt-4o-mini",
+            messages: [{ role: "user", content: `أجب باختصار بالعربية: ${req.body.message}` }],
+        });
+        res.json({ reply: response.choices[0].message.content });
+    } catch (e) { res.status(500).json({ reply: "عذراً، واجهت مشكلة تقنية." }); }
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log("Server Running with GPT-4o-mini"));
