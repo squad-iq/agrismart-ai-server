@@ -6,13 +6,18 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: "50mb" }));
 
-// جلب المفتاح من إعدادات Render
+// جلب المفتاح
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 app.post("/predict", async (req, res) => {
     try {
         const { image } = req.body;
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        
+        // إجبار السيرفر على استخدام نسخة v1 المستقرة
+        const model = genAI.getGenerativeModel(
+            { model: "gemini-1.5-flash" },
+            { apiVersion: "v1" } 
+        );
 
         const prompt = `أنت خبير نباتات. حلل الصورة وأجب بصيغة JSON فقط:
         {
@@ -29,36 +34,30 @@ app.post("/predict", async (req, res) => {
             { inlineData: { data: imageData, mimeType: "image/jpeg" } }
         ]);
 
-        const response = await result.response;
-        const text = response.text();
+        const text = result.response.text();
         const jsonMatch = text.match(/\{[\s\S]*\}/);
-        
-        if (jsonMatch) {
-            res.json(JSON.parse(jsonMatch[0]));
-        } else {
-            throw new Error("Invalid AI format");
-        }
+        res.json(JSON.parse(jsonMatch[0]));
 
     } catch (error) {
-        console.error("Error details:", error.message);
+        console.error("CRITICAL ERROR:", error.message);
         res.status(500).json({ 
             plant: "error", 
-            disease: "خطأ: " + error.message, 
+            disease: "Error: " + error.message, 
             confidence: "0", 
-            treatment: "تأكد من تحديث package.json والمفتاح" 
+            treatment: "تأكد من مسح الـ Cache في Render" 
         });
     }
 });
 
-// رابط الشات
+// روابط الشات
 app.post("/chat", async (req, res) => {
     try {
         const { message } = req.body;
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" }, { apiVersion: "v1" });
         const result = await model.generateContent(message);
         res.json({ reply: result.response.text() });
     } catch (e) { res.status(500).json({ reply: "تعذر الاتصال" }); }
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log("Server is running..."));
+app.listen(PORT, () => console.log("Server is running on V1..."));
