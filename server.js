@@ -6,19 +6,22 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: "50mb" }));
 
+// جلب المفتاح من إعدادات Render
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+
 app.post("/predict", async (req, res) => {
     try {
         const { image } = req.body;
-        if (!image) return res.status(400).json({ plant: "error", disease: "الصورة مفقودة" });
-
-        // التأكد من قراءة المفتاح
-        const apiKey = process.env.GEMINI_API_KEY;
-        if (!apiKey) return res.status(500).json({ plant: "error", disease: "المفتاح غير معرف في Render" });
-
-        const genAI = new GoogleGenerativeAI(apiKey);
         const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-        const prompt = `تحليل نبات، الرد JSON فقط: {"plant":"..", "disease":"..", "confidence":"..", "treatment":".."}`;
+        const prompt = `أنت خبير نباتات. حلل الصورة وأجب بصيغة JSON فقط:
+        {
+          "plant": "اسم النبات أو error إذا لم يكن نباتاً",
+          "disease": "التشخيص",
+          "confidence": "نسبة الدقة كرقيم فقط",
+          "treatment": "العلاج"
+        }`;
+
         const imageData = image.includes("base64,") ? image.split("base64,")[1] : image;
 
         const result = await model.generateContent([
@@ -27,18 +30,35 @@ app.post("/predict", async (req, res) => {
         ]);
 
         const response = await result.response;
-        res.json(JSON.parse(response.text().match(/\{[\s\S]*\}/)[0]));
+        const text = response.text();
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        
+        if (jsonMatch) {
+            res.json(JSON.parse(jsonMatch[0]));
+        } else {
+            throw new Error("Invalid AI format");
+        }
 
     } catch (error) {
-        // أهم سطر: إرسال سبب الخطأ الحقيقي للتطبيق
-        console.error("DEBUG:", error.message);
+        console.error("Error details:", error.message);
         res.status(500).json({ 
             plant: "error", 
-            disease: "سبب الخطأ: " + error.message, 
+            disease: "خطأ: " + error.message, 
             confidence: "0", 
-            treatment: "افحص سجلات Render لمزيد من التفاصيل" 
+            treatment: "تأكد من تحديث package.json والمفتاح" 
         });
     }
 });
 
-app.listen(process.env.PORT || 3000, () => console.log("Server Live"));
+// رابط الشات
+app.post("/chat", async (req, res) => {
+    try {
+        const { message } = req.body;
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        const result = await model.generateContent(message);
+        res.json({ reply: result.response.text() });
+    } catch (e) { res.status(500).json({ reply: "تعذر الاتصال" }); }
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log("Server is running..."));
