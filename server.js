@@ -6,7 +6,7 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: "50mb" }));
 
-// إعداد OpenAI بالمفتاح الجديد
+// الاتصال بمكتبة OpenAI
 const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
 });
@@ -16,6 +16,7 @@ app.post("/predict", async (req, res) => {
         const { image } = req.body;
         if (!image) return res.status(400).json({ error: "Image is required" });
 
+        // تجهيز الصورة لـ OpenAI
         const base64Image = image.includes("base64,") ? image : `data:image/jpeg;base64,${image}`;
 
         const response = await openai.chat.completions.create({
@@ -24,7 +25,7 @@ app.post("/predict", async (req, res) => {
                 {
                     role: "user",
                     content: [
-                        { type: "text", text: "أنت خبير نباتات. حلل الصورة وأجب بصيغة JSON فقط باللغة العربية: {\"plant\": \"اسم النبات\", \"disease\": \"التشخيص\", \"confidence\": \"الدقة كرقيم\", \"treatment\": \"العلاج\"}. إذا لم تكن لنبات، اجعل plant قيمتها error." },
+                        { type: "text", text: "أنت خبير نباتات. حلل الصورة وأجب بصيغة JSON فقط باللغة العربية: {\"plant\": \"اسم النبات\", \"disease\": \"التشخيص\", \"confidence\": \"الدقة كرقيم فقط\", \"treatment\": \"العلاج\"}. إذا لم تكن لنبات، اجعل plant قيمتها error." },
                         {
                             type: "image_url",
                             image_url: { "url": base64Image },
@@ -32,18 +33,18 @@ app.post("/predict", async (req, res) => {
                     ],
                 },
             ],
-            response_format: { type: "json_object" }, // إجبار الموديل على إعطاء JSON
+            response_format: { type: "json_object" },
         });
 
         res.json(JSON.parse(response.choices[0].message.content));
 
     } catch (error) {
         console.error("OpenAI Error:", error.message);
-        res.status(500).json({ 
+        res.status(200).json({ 
             plant: "error", 
-            disease: "خطأ في الاتصال بـ OpenAI", 
+            disease: "مشكلة في الرصيد أو الاتصال: " + error.message, 
             confidence: "0", 
-            treatment: "تأكد من شحن رصيد في حساب OpenAI الخاص بك." 
+            treatment: "تأكد من شحن رصيد في OpenAI." 
         });
     }
 });
@@ -55,7 +56,7 @@ app.post("/chat", async (req, res) => {
             messages: [{ role: "user", content: `أجب باختصار بالعربية: ${req.body.message}` }],
         });
         res.json({ reply: response.choices[0].message.content });
-    } catch (e) { res.status(500).json({ reply: "عذراً، واجهت مشكلة تقنية." }); }
+    } catch (e) { res.json({ reply: "عذراً، واجهت مشكلة تقنية." }); }
 });
 
 const PORT = process.env.PORT || 3000;
