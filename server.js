@@ -12,41 +12,33 @@ app.post("/predict", async (req, res) => {
         const apiKey = process.env.GEMINI_API_KEY;
         const imageData = image.includes("base64,") ? image.split("base64,")[1] : image;
 
-        const prompt = `أنت خبير نباتات. حلل الصورة وأجب بصيغة JSON فقط: {"plant": "اسم النبات", "disease": "التشخيص", "confidence": "100", "treatment": "العلاج"}. إذا لم يكن نباتاً اجعل plant هي error.`;
-
-        // نستخدم الرابط المستقر v1 مباشرة
-        const url = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-
+        // جربنا 1.5 وفشل، الآن سنستخدم gemini-pro-vision وهو الموديل الأكثر استقراراً للصور
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro-vision:generateContent?key=${apiKey}`;
+        
         const response = await axios.post(url, {
             contents: [{
                 parts: [
-                    { text: prompt },
+                    { text: "تحليل نبات، الرد JSON فقط: {'plant':'..', 'disease':'..', 'confidence':'..', 'treatment':'..'}" },
                     { inline_data: { mime_type: "image/jpeg", data: imageData } }
                 ]
             }]
         });
 
         const text = response.data.candidates[0].content.parts[0].text;
-        const jsonMatch = text.match(/\{[\s\S]*\}/);
-        res.json(JSON.parse(jsonMatch[0]));
+        res.json(JSON.parse(text.match(/\{[\s\S]*\}/)[0]));
 
     } catch (error) {
-        const msg = error.response ? JSON.stringify(error.response.data) : error.message;
-        console.error("DEBUG:", msg);
-        res.status(200).json({ plant: "error", disease: "خطأ في الاتصال: " + msg, confidence: "0", treatment: "حاول مرة أخرى" });
+        // إذا فشل الموديل القديم، سنحاول مع الموديل الجديد بصيغة مختلفة
+        try {
+             const urlFlash = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${process.env.GEMINI_API_KEY}`;
+             const resFlash = await axios.post(urlFlash, {
+                 contents: [{ parts: [{ text: "تحليل نبات JSON" }, { inline_data: { mime_type: "image/jpeg", data: image.split("base64,")[1] || image } }] }]
+             });
+             res.json(JSON.parse(resFlash.data.candidates[0].content.parts[0].text.match(/\{[\s\S]*\}/)[0]));
+        } catch (e) {
+            res.json({ plant: "error", disease: "جوجل يرفض الطلب (404/400). تأكد أن المفتاح من AI Studio وليس Cloud." });
+        }
     }
 });
 
-app.post("/chat", async (req, res) => {
-    try {
-        const apiKey = process.env.GEMINI_API_KEY;
-        const url = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-        const response = await axios.post(url, {
-            contents: [{ parts: [{ text: `أجب باختصار بالعربية: ${req.body.message}` }] }]
-        });
-        res.json({ reply: response.data.candidates[0].content.parts[0].text });
-    } catch (e) { res.json({ reply: "تعذر الرد" }); }
-});
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log("Server Live on Direct Mode v1"));
+app.listen(process.env.PORT || 3000, () => console.log("Stable Mode Live"));
