@@ -12,11 +12,11 @@ app.post("/predict", async (req, res) => {
         const apiKey = process.env.GEMINI_API_KEY;
         const imageData = image.includes("base64,") ? image.split("base64,")[1] : image;
 
-        const prompt = `أنت خبير نباتات. حلل الصورة وأجب بصيغة JSON فقط: {"plant": "اسم النبات", "disease": "سليم أو المرض", "confidence": "100", "treatment": "العلاج"}. إذا لم يكن نباتاً اجعل plant قيمتها error.`;
+        const prompt = `أنت خبير نباتات. حلل الصورة وأجب بصيغة JSON فقط: {"plant": "اسم النبات", "disease": "التشخيص", "confidence": "100", "treatment": "العلاج"}. إذا لم يكن نباتاً اجعل plant هي error.`;
 
-        // الاتصال المباشر بجوجل بدون مكتبات وسيطة
+        // نستخدم الرابط المستقر v1 مباشرة
         const url = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-        
+
         const response = await axios.post(url, {
             contents: [{
                 parts: [
@@ -31,17 +31,12 @@ app.post("/predict", async (req, res) => {
         res.json(JSON.parse(jsonMatch[0]));
 
     } catch (error) {
-        console.error("Direct API Error:", error.response ? error.response.data : error.message);
-        res.status(500).json({ 
-            plant: "error", 
-            disease: "خطأ في الاتصال المباشر: " + (error.response ? error.response.data.error.message : error.message), 
-            confidence: "0", 
-            treatment: "يرجى التأكد من المفتاح ومسح الـ Cache" 
-        });
+        const msg = error.response ? JSON.stringify(error.response.data) : error.message;
+        console.error("DEBUG:", msg);
+        res.status(200).json({ plant: "error", disease: "خطأ في الاتصال: " + msg, confidence: "0", treatment: "حاول مرة أخرى" });
     }
 });
 
-// رابط المساعد الذكي (اتصال مباشر أيضاً)
 app.post("/chat", async (req, res) => {
     try {
         const apiKey = process.env.GEMINI_API_KEY;
@@ -50,8 +45,8 @@ app.post("/chat", async (req, res) => {
             contents: [{ parts: [{ text: `أجب باختصار بالعربية: ${req.body.message}` }] }]
         });
         res.json({ reply: response.data.candidates[0].content.parts[0].text });
-    } catch (e) { res.json({ reply: "تعذر الرد حالياً" }); }
+    } catch (e) { res.json({ reply: "تعذر الرد" }); }
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log("Server running on Direct API mode..."));
+app.listen(PORT, () => console.log("Server Live on Direct Mode v1"));
