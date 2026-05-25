@@ -1,63 +1,62 @@
 const express = require("express");
 const cors = require("cors");
-const OpenAI = require("openai");
+const axios = require("axios"); // سنستخدم axios للاتصال المباشر لضمان الاستقرار
 
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: "50mb" }));
 
-// الاتصال بمكتبة OpenAI
-const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-});
-
 app.post("/predict", async (req, res) => {
     try {
         const { image } = req.body;
-        if (!image) return res.status(400).json({ error: "Image is required" });
+        const apiKey = (process.env.OPENAI_API_KEY || "").trim();
 
-        // تجهيز الصورة لـ OpenAI
+        if (!apiKey) return res.json({ plant: "error", disease: "المفتاح OPENAI_API_KEY غير موجود في Render" });
+
+        const prompt = "أنت خبير نباتات. حلل الصورة وأعطِ النتيجة بصيغة JSON حصراً باللغة العربية: {\"plant\": \"اسم النبات\", \"disease\": \"التشخيص\", \"confidence\": \"100\", \"treatment\": \"العلاج\"}. إذا لم يكن نباتاً اجعل plant هي error.";
+
+        // تجهيز الصورة (التأكد من وجود الترويسة الصحيحة)
         const base64Image = image.includes("base64,") ? image : `data:image/jpeg;base64,${image}`;
 
-        const response = await openai.chat.completions.create({
+        // الاتصال المباشر بـ OpenAI (أكثر استقراراً من المكتبة في النسخ المجانية)
+        const response = await axios.post("https://api.openai.com/v1/chat/completions", {
             model: "gpt-4o-mini",
             messages: [
                 {
                     role: "user",
                     content: [
-                        { type: "text", text: "أنت خبير نباتات. حلل الصورة وأجب بصيغة JSON فقط باللغة العربية: {\"plant\": \"اسم النبات\", \"disease\": \"التشخيص\", \"confidence\": \"الدقة كرقيم فقط\", \"treatment\": \"العلاج\"}. إذا لم تكن لنبات، اجعل plant قيمتها error." },
-                        {
-                            type: "image_url",
-                            image_url: { "url": base64Image },
-                        },
-                    ],
-                },
+                        { type: "text", text: prompt },
+                        { type: "image_url", image_url: { url: base64Image } }
+                    ]
+                }
             ],
-            response_format: { type: "json_object" },
+            response_format: { type: "json_object" }
+        }, {
+            headers: {
+                "Authorization": `Bearer ${apiKey}`,
+                "Content-Type": "application/json"
+            }
         });
 
-        res.json(JSON.parse(response.choices[0].message.content));
+        const result = JSON.parse(response.data.choices[0].message.content);
+        res.json(result);
 
     } catch (error) {
-        console.error("OpenAI Error:", error.message);
-        res.status(200).json({ 
+        // استخراج رسالة الخطأ الحقيقية من OpenAI
+        let detailedError = error.message;
+        if (error.response && error.response.data && error.response.data.error) {
+            detailedError = error.response.data.error.message;
+        }
+        
+        console.error("OpenAI Final Error:", detailedError);
+        
+        res.json({ 
             plant: "error", 
-            disease: "مشكلة في الرصيد أو الاتصال: " + error.message, 
+            disease: "رد OpenAI الحقيقي: " + detailedError, 
             confidence: "0", 
-            treatment: "تأكد من شحن رصيد في OpenAI." 
+            treatment: "إذا كان الخطأ insufficient_quota، انتظر 30 دقيقة لتفعيل الرصيد." 
         });
     }
 });
 
-app.post("/chat", async (req, res) => {
-    try {
-        const response = await openai.chat.completions.create({
-            model: "gpt-4o-mini",
-            messages: [{ role: "user", content: `أجب باختصار بالعربية: ${req.body.message}` }],
-        });
-        res.json({ reply: response.choices[0].message.content });
-    } catch (e) { res.json({ reply: "عذراً، واجهت مشكلة تقنية." }); }
-});
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log("Server Running with GPT-4o-mini"));
+app.listen(process.env.PORT || 3000, () => console.log("OpenAI Direct Server Live"));
