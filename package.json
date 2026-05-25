@@ -1,13 +1,17 @@
 {
   "name": "agrismart-ai-server",
-  "version": "3.0.0",
+  "version": "3.1.0",
+  "description": "Plant Diagnosis Server - Direct OpenAI API",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
+    "axios": "^1.6.8",
     "cors": "^2.8.5",
-    "express": "^4.19.2",
-    "openai": "^4.52.0"
+    "express": "^4.19.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
