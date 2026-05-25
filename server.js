@@ -7,7 +7,8 @@ app.use(cors());
 app.use(express.json({ limit: "50mb" }));
 
 // ضع مفتاح Gemini الخاص بك هنا أو في إعدادات Render (Environment Variables)
-const genAI = new GoogleGenerativeAI("AIzaSyD6vPkFG2Ksplhj_uRO7pEVaAAy8JQ_rLI");
+// هكذا سيقوم السيرفر بقراءة المفتاح من إعدادات النظام وليس من الكود
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 // 1. رابط تشخيص الأمراض
 app.post("/predict", async (req, res) => {
