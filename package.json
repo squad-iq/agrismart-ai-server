@@ -1,7 +1,6 @@
 {
   "name": "agrismart-ai-server",
   "version": "3.0.0",
-  "description": "Plant Diagnosis OpenAI Server",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
