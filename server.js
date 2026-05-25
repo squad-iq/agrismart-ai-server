@@ -6,75 +6,80 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: "50mb" }));
 
-// ضع مفتاح Gemini الخاص بك هنا أو في إعدادات Render (Environment Variables)
-// هكذا سيقوم السيرفر بقراءة المفتاح من إعدادات النظام وليس من الكود
+// التأكد من وجود المفتاح
+if (!process.env.GEMINI_API_KEY) {
+    console.error("FATAL ERROR: GEMINI_API_KEY is not defined.");
+}
+
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+
+// وظيفة مساعدة لتنظيف ومعالجة الصورة
+function prepareImage(imageField) {
+    if (!imageField) return null;
+    return imageField.includes("base64,") ? imageField.split("base64,")[1] : imageField;
+}
 
 // 1. رابط تشخيص الأمراض
 app.post("/predict", async (req, res) => {
     try {
         const { image } = req.body;
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        const imageData = prepareImage(image);
+        if (!imageData) return res.status(400).json({ error: "Image data is missing" });
 
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
         const prompt = `
-        أنت خبير نباتات عالمي. قم بتحليل الصورة بدقة:
-        1. إذا كانت الصورة لا تحتوي على نبات أو ورقة شجر، أجب بكلمة "error" في حقل plant.
-        2. إذا كان نباتاً، حدد النوع بدقة والتشخيص (سليم أو مريض).
-        3. أعطِ نسبة ثقة حقيقية (0-100).
-        4. إذا كان مريضاً، أعطِ خطوات علاج عملية.
-        يجب أن يكون الرد بصيغة JSON حصراً:
-        {
-          "plant": "اسم النبات أو error",
-          "disease": "اسم المرض أو سليم",
-          "confidence": "نسبة الدقة كرقيم فقط",
-          "treatment": "خطوات العلاج"
-        }
+        أنت خبير نباتات. حلل الصورة:
+        1. إذا لم تكن لنبات، أجب بكلمة "error" في حقل plant.
+        2. إذا كان نباتاً، حدد النوع والتشخيص.
+        3. الدقة (0-100).
+        4. العلاج إن وجد.
+        الرد JSON فقط: {"plant":"..", "disease":"..", "confidence":"..", "treatment":".."}
         `;
 
         const result = await model.generateContent([
             prompt,
-            { inlineData: { data: image.split(",")[1] || image, mimeType: "image/jpeg" } }
+            { inlineData: { data: imageData, mimeType: "image/jpeg" } }
         ]);
 
-        const response = await result.response;
-        const text = response.text();
+        const text = result.response.text();
         const jsonMatch = text.match(/\{[\s\S]*\}/);
-        res.json(JSON.parse(jsonMatch[0]));
+        
+        if (jsonMatch) {
+            res.json(JSON.parse(jsonMatch[0]));
+        } else {
+            throw new Error("Invalid AI Response");
+        }
 
     } catch (error) {
-        res.status(500).json({ plant: "نبات غير معروف", disease: "خطأ في السيرفر", confidence: "0", treatment: "حاول مرة أخرى" });
+        console.error(error);
+        res.status(500).json({ plant: "error", disease: "فشل التحليل", confidence: "0", treatment: "حاول مجدداً" });
     }
 });
 
-// 2. رابط تحديد نوع النبات فقط
+// 2. رابط تحديد النوع
 app.post("/identify", async (req, res) => {
     try {
         const { image } = req.body;
+        const imageData = prepareImage(image);
         const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-        const prompt = "حدد اسم هذا النبات فقط من الصورة. الرد يكون JSON: {'plant': 'اسم النبات'}";
-        
         const result = await model.generateContent([
-            prompt,
-            { inlineData: { data: image.split(",")[1] || image, mimeType: "image/jpeg" } }
+            'حدد اسم النبات في الصورة. الرد JSON: {"plant": "اسم النبات"}',
+            { inlineData: { data: imageData, mimeType: "image/jpeg" } }
         ]);
-        const text = (await result.response).text();
-        const jsonMatch = text.match(/\{[\s\S]*\}/);
-        res.json(JSON.parse(jsonMatch[0]));
+        const jsonMatch = result.response.text().match(/\{[\s\S]*\}/);
+        res.json(jsonMatch ? JSON.parse(jsonMatch[0]) : { plant: "نبات غير معروف" });
     } catch (e) { res.json({ plant: "نبات غير معروف" }); }
 });
 
-// 3. رابط المساعد الذكي (الدردشة) - مفقود سابقاً
+// 3. رابط المساعد الذكي
 app.post("/chat", async (req, res) => {
     try {
         const { message } = req.body;
         const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-        const chatPrompt = `أنت مساعد زراعي ذكي في تطبيق GreenMind. أجب باختصار واحترافية باللغة العربية على هذا السؤال الزراعي: ${message}`;
-        
-        const result = await model.generateContent(chatPrompt);
-        const response = await result.response;
-        res.json({ reply: response.text() });
+        const result = await model.generateContent(`أجب باختصار باللغة العربية: ${message}`);
+        res.json({ reply: result.response.text() });
     } catch (error) {
-        res.status(500).json({ reply: "عذراً، أنا متعب قليلاً الآن. اسألني لاحقاً!" });
+        res.status(500).json({ reply: "المعذرة، واجهت مشكلة تقنية." });
     }
 });
 
